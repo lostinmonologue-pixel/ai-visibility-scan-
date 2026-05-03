@@ -502,50 +502,55 @@ For each query provide:
 - If brand does NOT appear and a competitor was provided, which competitor appears instead (string or null)
 - What AI actually says in 1-2 sentences — specific and factual, not generic
 
-For the 4 gap signals, assess each pillar and return ONLY the status: "good", "weak", or "not-found". Do not write the signal text — that is handled separately.
+For the 4 gap signals, assess each pillar based strictly on what your web search found. Return ONLY the status for each: "good", "weak", or "not-found". Do not write the signal text.
 
-Pillar A (Discoverability): Does the brand appear in generic high-intent AI queries for this category?
-Pillar B (Entity clarity): Is the brand's identity and offering clear and unambiguous to AI?
-Pillar C (Content extractability): Can AI extract and cite specific, accurate information about this brand?
-Pillar D (Decision journey): Would a high-intent AI-referred visitor be able to confirm expectations and convert?
+Pillar A (Discoverability): Does the brand appear in generic high-intent AI queries for this category? "good" = appears reliably. "weak" = appears sometimes. "not-found" = never appears.
+Pillar B (Entity clarity): Is the brand's identity and offering clear and unambiguous based on what you found? "good" = clearly described. "weak" = vague or partial. "not-found" = no clear identity found.
+Pillar C (Content extractability): Can specific, accurate facts about this brand be extracted from what you found? "good" = specific facts available. "weak" = only generic info. "not-found" = nothing to extract.
+Pillar D (Decision journey): Based on what you found about the site, would a high-intent visitor be able to confirm expectations and convert? "good" = clear path to convert. "weak" = friction exists. "not-found" = no conversion path evident.
 
-Overall score: integer 0-100. Reflects overall AI visibility across all queries and pillars. Below 50 = weak.
+Scoring rules (calculate honestly based on your findings above):
+- Each "good" pillar = 25 points
+- Each "weak" pillar = 10 points  
+- Each "not-found" pillar = 0 points
+- overall_score = sum of all four pillar scores
+- overall_label = "Strong" if score >= 75, "Moderate" if score >= 50, "Weak" if score < 50
 
-Return this exact JSON structure:
+Return this exact JSON structure with no example values — replace all placeholders with your actual findings:
 {
   "brand": "${brand}",
   "url": "${url}",
   "category": "${category}",
-  "overall_score": 28,
-  "overall_label": "Weak",
+  "overall_score": [calculated integer],
+  "overall_label": "[Strong|Moderate|Weak]",
   "queries": [
     {
       "type": "Informational",
-      "query": "actual query text",
-      "brand_appears": false,
-      "competitor_cited": "Competitor Name or null",
-      "ai_says": "What AI says — specific and factual."
+      "query": "[actual query you used]",
+      "brand_appears": [true|false],
+      "competitor_cited": "[competitor name or null]",
+      "ai_says": "[what you actually found — specific and factual, not generic]"
     },
     {
       "type": "Comparative",
-      "query": "actual query text",
-      "brand_appears": false,
-      "competitor_cited": null,
-      "ai_says": "What AI says."
+      "query": "[actual query you used]",
+      "brand_appears": [true|false],
+      "competitor_cited": "[competitor name or null]",
+      "ai_says": "[what you actually found]"
     },
     {
       "type": "Navigational",
-      "query": "actual query text",
-      "brand_appears": true,
+      "query": "[actual query you used]",
+      "brand_appears": [true|false],
       "competitor_cited": null,
-      "ai_says": "What AI says about the brand directly."
+      "ai_says": "[what you actually found about the brand directly]"
     }
   ],
   "gap_signals": [
-    {"pillar": "A", "name": "Discoverability", "status": "not-found"},
-    {"pillar": "B", "name": "Entity clarity", "status": "weak"},
-    {"pillar": "C", "name": "Content extractability", "status": "weak"},
-    {"pillar": "D", "name": "Decision journey", "status": "weak"}
+    {"pillar": "A", "name": "Discoverability", "status": "[good|weak|not-found]"},
+    {"pillar": "B", "name": "Entity clarity", "status": "[good|weak|not-found]"},
+    {"pillar": "C", "name": "Content extractability", "status": "[good|weak|not-found]"},
+    {"pillar": "D", "name": "Decision journey", "status": "[good|weak|not-found]"}
   ]
 }`;
 
@@ -556,7 +561,8 @@ Return this exact JSON structure:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1200,
+        max_tokens: 2500,
+        temperature: 0,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
         messages: [{ role: 'user', content: prompt }]
       })
@@ -587,7 +593,11 @@ Return this exact JSON structure:
 }
 
 function renderResults(d) {
-  const score = parseInt(d.overall_score) || 0;
+  // Always calculate score from pillars — never trust the AI's number
+  const pillarScores = { 'good': 25, 'weak': 10, 'not-found': 0 };
+  const computedScore = (d.gap_signals || []).reduce((sum, g) => sum + (pillarScores[g.status] || 0), 0);
+  const score = computedScore;
+  const overallLabel = score >= 75 ? 'Strong' : score >= 50 ? 'Moderate' : 'Weak';
   const isGood = score >= 50;
   const cls = isGood ? 'good' : 'weak';
 
@@ -631,7 +641,7 @@ function renderResults(d) {
     <div class="score-card">
       <div class="score-ring ${cls}">${score}%</div>
       <div class="score-info">
-        <div class="score-headline">AI visibility: ${d.overall_label}</div>
+        <div class="score-headline">AI visibility: ${overallLabel}</div>
         <div class="score-desc">Based on how this brand appears across informational, comparative, and navigational AI queries in this category.</div>
       </div>
     </div>
