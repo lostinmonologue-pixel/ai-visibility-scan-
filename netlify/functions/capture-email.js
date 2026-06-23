@@ -25,7 +25,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const { email, brand, url, category, score } = body;
+  const { email } = body;
 
   try {
     const response = await fetch('https://www.wixapis.com/contacts/v4/contacts', {
@@ -39,27 +39,20 @@ exports.handler = async (event) => {
         info: {
           emails: {
             items: [{ tag: 'MAIN', email }]
-          },
-          labelKeys: {
-            items: [{ key: 'custom.ai-scan-lead' }]
-          },
-          extendedFields: {
-            items: {
-              'custom.scan-brand': brand || '',
-              'custom.scan-url': url || '',
-              'custom.scan-category': category || '',
-              'custom.scan-score': score ? String(score) : '0',
-              'custom.lead-source': 'AI Visibility Scan'
-            }
           }
         }
       })
     });
 
-    // 200 = created, 409 = contact already exists — both are fine
+    const responseBody = await response.json().catch(() => ({}));
+
+    // 409 = contact already exists — still fine
     if (!response.ok && response.status !== 409) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || `Wix API error ${response.status}`);
+      return {
+        statusCode: 500,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: `Wix API ${response.status}`, detail: responseBody })
+      };
     }
 
     return {
