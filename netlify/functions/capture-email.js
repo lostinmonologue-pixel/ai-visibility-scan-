@@ -40,6 +40,9 @@ exports.handler = async (event) => {
           emails: {
             items: [{ tag: 'MAIN', email }]
           },
+          labelKeys: {
+            items: [{ key: 'custom.ai-scan-lead' }]
+          },
           extendedFields: {
             items: {
               'custom.scan-brand': brand || '',
