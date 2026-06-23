@@ -395,6 +395,14 @@ body {
 <script>
 const STEPS = ['s0','s1','s2','s3'];
 let stepTimer;
+let storedData = null;
+
+// Listen for reveal message from Wix parent page
+window.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'xyra-reveal-results' && storedData) {
+    renderResults(storedData);
+  }
+});
 
 const SIGNALS = {
   A: {
@@ -578,12 +586,58 @@ Return this exact JSON structure with no example values — replace all placehol
     const parsed = JSON.parse(text.slice(s, e + 1));
 
     document.getElementById('loading-view').className = 'loading-view';
-    renderResults(parsed);
+    storedData = parsed;
+    renderTeasedResults(parsed);
 
   } catch (err) {
     clearTimeout(stepTimer);
     showError('Scan failed: ' + (err.message || 'Please try again.'));
   }
+}
+
+function renderTeasedResults(d) {
+  const pillarScores = { 'good': 25, 'weak': 10, 'not-found': 0 };
+  const score = (d.gap_signals || []).reduce((sum, g) => sum + (pillarScores[g.status] || 0), 0);
+  const overallLabel = score >= 75 ? 'Strong' : score >= 50 ? 'Moderate' : 'Weak';
+  const cls = score >= 50 ? 'good' : 'weak';
+
+  document.getElementById('results-view').innerHTML = `
+    <div class="result-brand">
+      <h2>${d.brand}</h2>
+      <div class="result-meta">${d.url} &nbsp;&middot;&nbsp; ${d.category}</div>
+    </div>
+
+    <div class="score-card">
+      <div class="score-ring ${cls}">${score}%</div>
+      <div class="score-info">
+        <div class="score-headline">AI visibility: ${overallLabel}</div>
+        <div class="score-desc">Based on how this brand appears across informational, comparative, and navigational AI queries in this category.</div>
+      </div>
+    </div>
+
+    <div style="position:relative; margin-bottom: 2.5rem;">
+      <div style="filter: blur(5px); pointer-events: none; user-select: none;">
+        <div class="section-label">What AI says before your visitor arrives</div>
+        <div class="query-card"><div class="query-type">Informational</div><div class="query-q" style="height:1em;background:var(--border);border-radius:4px;width:80%"></div><div class="query-result" style="height:2.5em;background:var(--border);border-radius:4px;margin-top:8px"></div></div>
+        <div class="query-card"><div class="query-type">Comparative</div><div class="query-q" style="height:1em;background:var(--border);border-radius:4px;width:70%"></div><div class="query-result" style="height:2.5em;background:var(--border);border-radius:4px;margin-top:8px"></div></div>
+        <div class="query-card"><div class="query-type">Navigational</div><div class="query-q" style="height:1em;background:var(--border);border-radius:4px;width:75%"></div><div class="query-result" style="height:2.5em;background:var(--border);border-radius:4px;margin-top:8px"></div></div>
+        <div class="section-label" style="margin-top:1.5rem">Visibility gap signals</div>
+        ${(d.gap_signals || []).map(g => `<div class="gap-row"><div class="gap-pillar">Pillar ${g.pillar}</div><div class="gap-content"><div class="gap-name">${g.name}</div><div style="height:0.8em;background:var(--border);border-radius:4px;width:85%;margin-top:6px"></div></div>${pill(g.status)}</div>`).join('')}
+      </div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem 2rem;text-align:center;max-width:340px;box-shadow:0 4px 24px rgba(34,34,34,0.08);">
+          <div style="font-family:var(--heading-font);font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px">Your full results are ready</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">Enter your work email above to unlock the query breakdown and gap analysis.</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('results-view').className = 'results-view show';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Tell the Wix parent page the teaser is showing — triggers the email form
+  window.parent.postMessage({ type: 'xyra-scan-ready' }, 'https://www.xyrafoundry.com');
 }
 
 function renderResults(d) {
@@ -648,7 +702,7 @@ function renderResults(d) {
 
     <div class="cta-card">
       <h3>This scan shows you the gap.<br>A full audit shows you how to close it.</h3>
-      <p>The AI Readiness UX Audit covers 31 items across all four pillars — with findings tied directly to pipeline outcomes and a prioritised action plan. From £699.</p>
+      <p>The AI Readiness UX Audit covers 30 items across all four pillars — with findings tied directly to pipeline outcomes and a prioritised action plan. From £699.</p>
       <a class="cta-link" href="https://xyrafoundry.com/contact" target="_blank">Get your full audit</a>
     </div>
 
