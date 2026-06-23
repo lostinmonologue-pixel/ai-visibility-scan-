@@ -397,12 +397,7 @@ const STEPS = ['s0','s1','s2','s3'];
 let stepTimer;
 let storedData = null;
 
-// Listen for reveal message from Wix parent page
-window.addEventListener('message', function(event) {
-  if (event.data && event.data.type === 'xyra-reveal-results' && storedData) {
-    renderResults(storedData);
-  }
-});
+
 
 const SIGNALS = {
   A: {
@@ -562,7 +557,7 @@ Return this exact JSON structure with no example values — replace all placehol
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 2500,
         temperature: 0,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
@@ -624,10 +619,13 @@ function renderTeasedResults(d) {
         <div class="section-label" style="margin-top:1.5rem">Visibility gap signals</div>
         ${(d.gap_signals || []).map(g => `<div class="gap-row"><div class="gap-pillar">Pillar ${g.pillar}</div><div class="gap-content"><div class="gap-name">${g.name}</div><div style="height:0.8em;background:var(--border);border-radius:4px;width:85%;margin-top:6px"></div></div>${pill(g.status)}</div>`).join('')}
       </div>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem 2rem;text-align:center;max-width:340px;box-shadow:0 4px 24px rgba(34,34,34,0.08);">
-          <div style="font-family:var(--heading-font);font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px">Your full results are ready</div>
-          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">Enter your work email above to unlock the query breakdown and gap analysis.</div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:1rem;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem 2rem;text-align:center;max-width:340px;width:100%;box-shadow:0 4px 24px rgba(34,34,34,0.08);">
+          <div style="font-family:var(--heading-font);font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px;">Your full results are ready</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:1.25rem;">Enter your work email to unlock the query breakdown and gap analysis.</div>
+          <input type="email" id="gate-email" placeholder="your@work.com" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--text);outline:none;font-family:var(--body-font);margin-bottom:10px;box-sizing:border-box;" />
+          <div id="gate-error" style="display:none;font-size:12px;color:var(--red-text);margin-bottom:8px;text-align:left;"></div>
+          <button onclick="submitEmail()" id="gate-btn" style="width:100%;background:var(--btn-primary);color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--body-font);">Unlock my results</button>
         </div>
       </div>
     </div>
@@ -635,9 +633,42 @@ function renderTeasedResults(d) {
 
   document.getElementById('results-view').className = 'results-view show';
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
-  // Tell the Wix parent page the teaser is showing — triggers the email form
-  window.parent.postMessage({ type: 'xyra-scan-ready' }, 'https://www.xyrafoundry.com');
+async function submitEmail() {
+  const emailInput = document.getElementById('gate-email');
+  const btn = document.getElementById('gate-btn');
+  const errEl = document.getElementById('gate-error');
+  const email = emailInput ? emailInput.value.trim() : '';
+
+  errEl.style.display = 'none';
+
+  if (!email || !email.includes('@')) {
+    errEl.textContent = 'Please enter a valid email address.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Unlocking...';
+
+  try {
+    await fetch('/.netlify/functions/capture-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        brand: storedData ? storedData.brand : '',
+        url: storedData ? storedData.url : '',
+        category: storedData ? storedData.category : '',
+        score: storedData ? storedData.overall_score : 0
+      })
+    });
+  } catch (err) {
+    // Silently continue — never block the reveal on a capture failure
+  }
+
+  renderResults(storedData);
 }
 
 function renderResults(d) {
